@@ -8,6 +8,7 @@ pinned: false
 license: apache-2.0
 base_path: /chat
 app_port: 3000
+failure_strategy: rollback
 ---
 
 # Chat UI
@@ -174,36 +175,33 @@ You can customize the parameters passed to the model or even use a new model by 
 ```env
 MODELS=`[
   {
-    "name": "OpenAssistant/oasst-sft-4-pythia-12b-epoch-3.5",
-    "datasetName": "OpenAssistant/oasst1",
-    "description": "A good alternative to ChatGPT",
-    "websiteUrl": "https://open-assistant.io",
-    "userMessageToken": "<|prompter|>", # This does not need to be a token, can be any string
-    "assistantMessageToken": "<|assistant|>", # This does not need to be a token, can be any string
-    "userMessageEndToken": "<|endoftext|>", # Applies only to user messages. Can be any string.
-    "assistantMessageEndToken": "<|endoftext|>", # Applies only to assistant messages. Can be any string.
-    "preprompt": "Below are a series of dialogues between various people and an AI assistant. The AI tries to be helpful, polite, honest, sophisticated, emotionally aware, and humble but knowledgeable. The assistant is happy to help with almost anything and will do its best to understand exactly what is needed. It also tries to avoid giving false or misleading information, and it caveats when it isn't entirely sure about the right answer. That said, the assistant is practical and really does its best, and doesn't let caution get too much in the way of being useful.\n-----\n",
+    "name": "mistralai/Mistral-7B-Instruct-v0.2",
+    "displayName": "mistralai/Mistral-7B-Instruct-v0.2",
+    "description": "Mistral 7B is a new Apache 2.0 model, released by Mistral AI that outperforms Llama2 13B in benchmarks.",
+    "websiteUrl": "https://mistral.ai/news/announcing-mistral-7b/",
+    "preprompt": "",
+    "chatPromptTemplate" : "<s>{{#each messages}}{{#ifUser}}[INST] {{#if @first}}{{#if @root.preprompt}}{{@root.preprompt}}\n{{/if}}{{/if}}{{content}} [/INST]{{/ifUser}}{{#ifAssistant}}{{content}}</s>{{/ifAssistant}}{{/each}}",
+    "parameters": {
+      "temperature": 0.3,
+      "top_p": 0.95,
+      "repetition_penalty": 1.2,
+      "top_k": 50,
+      "truncate": 3072,
+      "max_new_tokens": 1024,
+      "stop": ["</s>"]
+    },
     "promptExamples": [
       {
         "title": "Write an email from bullet list",
         "prompt": "As a restaurant owner, write a professional email to the supplier to get these products every week: \n\n- Wine (x10)\n- Eggs (x24)\n- Bread (x12)"
       }, {
         "title": "Code a snake game",
-        "prompt": "Code a basic snake game in python and give explanations for each step."
+        "prompt": "Code a basic snake game in python, give explanations for each step."
       }, {
         "title": "Assist in a task",
         "prompt": "How do I make a delicious lemon cheesecake?"
       }
-    ],
-    "parameters": {
-      "temperature": 0.9,
-      "top_p": 0.95,
-      "repetition_penalty": 1.2,
-      "top_k": 50,
-      "truncate": 1000,
-      "max_new_tokens": 1024,
-      "stop": ["<|endoftext|>"]  # This does not need to be tokens, can be any list of strings
-    }
+    ]
   }
 ]`
 
@@ -228,7 +226,7 @@ The following is the default `chatPromptTemplate`, although newlines and indenti
 
 #### Multi modal model
 
-We currently only support IDEFICS as a multimodal model, hosted on TGI. You can enable it by using the followin config (if you have a PRO HF Api token):
+We currently only support IDEFICS as a multimodal model, hosted on TGI. You can enable it by using the following config (if you have a PRO HF Api token):
 
 ```env
     {
@@ -315,6 +313,75 @@ MODELS=`[{
       "endpoints" : [{
         "type": "openai"
       }]
+}]`
+```
+
+You may also consume any model provider that provides compatible OpenAI API endpoint. For example, you may self-host [Portkey](https://github.com/Portkey-AI/gateway) gateway and experiment with Claude or GPTs offered by Azure OpenAI. Example for Claude from Anthropic:
+
+```
+MODELS=`[{
+  "name": "claude-2.1",
+  "displayName": "Claude 2.1",
+  "description": "Anthropic has been founded by former OpenAI researchers...",
+  "parameters": {
+      "temperature": 0.5,
+      "max_new_tokens": 4096,
+  },
+  "endpoints": [
+      {
+          "type": "openai",
+          "baseURL": "https://gateway.example.com/v1",
+          "defaultHeaders": {
+              "x-portkey-config": '{"provider":"anthropic","api_key":"sk-ant-abc...xyz"}'
+          }
+      }
+  ]
+}]`
+```
+
+Example for GPT 4 deployed on Azure OpenAI:
+
+```
+MODELS=`[{
+  "id": "gpt-4-1106-preview",
+  "name": "gpt-4-1106-preview",
+  "displayName": "gpt-4-1106-preview",
+  "parameters": {
+      "temperature": 0.5,
+      "max_new_tokens": 4096,
+  },
+  "endpoints": [
+      {
+          "type": "openai",
+          "baseURL": "https://gateway.example.com/v1",
+          "defaultHeaders": {
+              "x-portkey-config": '{"provider":"azure-openai","resource_name":"abc-fr","deployment_id":"gpt-4-1106-preview","api_version":"2023-03-15-preview","api_key":"abc...xyz"}'
+          }
+      }
+  ]
+}]`
+```
+
+Or try Mistral from [Deepinfra](https://deepinfra.com/mistralai/Mistral-7B-Instruct-v0.1/api?example=openai-http):
+
+> Note, apiKey can either be set custom per endpoint, or globally using `OPENAI_API_KEY` variable.
+
+```
+MODELS=`[{
+  "name": "mistral-7b",
+  "displayName": "Mistral 7B",
+  "description": "A 7B dense Transformer, fast-deployed and easily customisable. Small, yet powerful for a variety of use cases. Supports English and code, and a 8k context window.",
+  "parameters": {
+      "temperature": 0.5,
+      "max_new_tokens": 4096,
+  },
+  "endpoints": [
+      {
+          "type": "openai",
+          "baseURL": "https://api.deepinfra.com/v1/openai",
+          "apiKey": "abc...xyz"
+      }
+  ]
 }]`
 ```
 
@@ -431,10 +498,10 @@ You can then add the generated information and the `authorization` parameter to 
 
 ```env
 "endpoints": [
-{
-"url": "https://HOST:PORT",
-"authorization": "Basic VVNFUjpQQVNT",
-}
+  {
+    "url": "https://HOST:PORT",
+    "authorization": "Basic VVNFUjpQQVNT",
+  }
 ]
 ```
 
@@ -446,15 +513,15 @@ If the model being hosted will be available on multiple servers/instances add th
 
 ```env
 "endpoints": [
-{
-"url": "https://HOST:PORT",
-"weight": 1
-}
-{
-"url": "https://HOST:PORT",
-"weight": 2
-}
-...
+  {
+    "url": "https://HOST:PORT",
+    "weight": 1
+  },
+  {
+    "url": "https://HOST:PORT",
+    "weight": 2
+  }
+  ...
 ]
 ```
 
